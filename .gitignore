@@ -5,9 +5,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-#Ignore fastapi volumes
-/fastapi/
-
 # Ignore Neo4j data, configuration, logs, and plugins directories
 /db/neo4j/data/
 /db/neo4j/conf/
