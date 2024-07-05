@@ -81,6 +81,6 @@ def load_data(base_file_name):
 
 if __name__ == "__main__":
     #Metadata about books
-    #load_data('meta_books.json')
+    load_data('meta_books.json')
     #Book reviews
     load_data('review_books.json')
