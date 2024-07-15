@@ -1,11 +1,17 @@
+import sys
 import os
+
+import neo4j
+
+# Add the parent directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import json
-import re
 import boto3
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 #User-defined packages
 from data_transformation.data_cleaning import preprocess_categories
+from data_transformation.data_validation import is_valid_book, is_valid_review
 
 
 def extract_from_s3(bucket_name, data_categ, year):
@@ -56,90 +62,121 @@ def load_to_neo4j(session, data_categ):
     #Deal with the book metadata
     if data_categ == 'meta_books':
         for book in generate_json_objects(data_categ):
+            if not is_valid_book(book):
+                print(f"Skipping invalid book object: {book}")
+                continue
             # Create Book node
             #ON CREATE SET: If the node is newly created (i.e., it didn't exist before), it sets the properties title, price etc
             #ON MATCH SET: If the node already exists (i.e., it was matched), it updates the properties only if they are NULL or haven't been set yet
             #The COALESCE function ensures that existing properties aren't overwritten with values coming from thw new data (note: in some cases this behaviour might be desirable)
-            session.run(
+            try:
+                session.run(
                 """
                 MERGE (b:Book {asin: $asin})
-                ON CREATE SET b.title = $title, b.price = $price, b.imUrl = $imUrl, b.salesRank = $salesRank
+                ON CREATE SET b.title = $title, b.price = $price, b.imUrl = $imUrl
                 ON MATCH SET b.title = COALESCE(b.title, $title), 
                              b.price = COALESCE(b.price, $price), 
-                             b.imUrl = COALESCE(b.imUrl, $imUrl), 
-                             b.salesRank = COALESCE(b.salesRank, $salesRank)
-                             b.categories = COALESCE(b.categories, $categories)
+                             b.imUrl = COALESCE(b.imUrl, $imUrl)
                 """,
                 asin=book['asin'], title=book.get('title', None), price=book.get('price', None),
-                imUrl=book.get('imUrl', None), salesRank=book.get('salesRank', None)
-            )
+                imUrl=book.get('imUrl', None)
+                )
 
-            #Create categories and sub-categories nodes and relationships
-            if 'categories' in book:
-                main_category = preprocess_categories(book['categories'])['main_category']
-                sub_categories = preprocess_categories(book['categories'])['sub_categories']
+                #Create categories and sub-categories nodes and relationships
+                if 'categories' in book:
+                    main_category = preprocess_categories(book['categories'])['main_category']
+                    sub_categories = preprocess_categories(book['categories'])['sub_categories']
 
-                #if there is a category
-                if main_category:
-                    session.run(
-                        """
-                        MERGE (main:Category {name: $main_category})
-                        WITH main
-                        MATCH (b:Book {asin: $asin})
-                        MERGE (b)-[:BELONGS_TO]->(main)
-                        """,
-                        main_category=main_category, asin=book['asin']
-                    )
-                    # if there is at least one sub_category Nb: there can be no sub-categories if there is no main category
-                    if sub_categories:
+                    #if there is a category
+                    if main_category:
                         session.run(
                             """
-                            MATCH (main:Category {name: $main_category})
-                            FOREACH (sub_category_name IN $sub_categories |
-                            MERGE (sub:Category {name: sub_category_name})
-                            MERGE (main)-[:HAS_SUB_CATEGORY]->(sub)
-)
+                            MERGE (main:Category {name: $main_category})
+                            WITH main
+                            MATCH (b:Book {asin: $asin})
+                            MERGE (b)-[:BELONGS_TO]->(main)
                             """,
-                            main_category=main_category,
-                            sub_categories=sub_categories
+                            main_category=main_category, asin=book['asin']
                         )
+                        # if there is at least one sub_category Nb: there can be no sub-categories if there is no main category
+                        if sub_categories:
+                            session.run(
+                                """
+                                MATCH (main:Category {name: $main_category})
+                                FOREACH (sub_category_name IN $sub_categories |
+                                MERGE (sub:Category {name: sub_category_name})
+                                MERGE (main)-[:HAS_SUB_CATEGORY]->(sub))
+                                """,
+                                main_category=main_category,
+                                sub_categories=sub_categories
+                            )
 
-            # Create relationships (ALSO_BOUGHT) if 'related' exists and 'also_bought' is present
-            if 'related' in book and 'also_bought' in book['related']:
-                for also_bought_asin in book['related']['also_bought']:
-                    session.run(
-                       """
-                       MERGE (b1:Book {asin: $asin1}) 
-                       MERGE (b2:Book {asin: $asin2})
-                       MERGE (b1)-[:ALSO_BOUGHT]->(b2)
-                       """,
-                       asin1=book['asin'], asin2=also_bought_asin
-                    )
-
-
-            # Create relationships (BUY_AFTER_VIEWING)
-            if 'related' in book and 'buy_after_viewing' in book['related']:
-                for buy_after_viewing_asin in book['related']['buy_after_viewing']:
+                # Create relationships (ALSO_BOUGHT) if 'related' exists and 'also_bought' is present
+                if 'related' in book and 'also_bought' in book['related']:
+                    for also_bought_asin in book['related']['also_bought']:
                         session.run(
-                        """
-                        MERGE (b1:Book {asin: $asin1}) 
-                        MERGE (b2:Book {asin: $asin2})
-                        MERGE (b1)-[:BUY_AFTER_VIEWING]->(b2)
-                        """,
-                        asin1=book['asin'], asin2=buy_after_viewing_asin
+                           """
+                           MERGE (b1:Book {asin: $asin1}) 
+                           MERGE (b2:Book {asin: $asin2})
+                           MERGE (b1)-[:ALSO_BOUGHT]->(b2)
+                           """,
+                           asin1=book['asin'], asin2=also_bought_asin
                         )
-            # Create relationships (ALSO_VIEWED)
-            if 'related' in book and 'also_viewed' in book['related']:
-                for also_viewed_asin in book['related']['buy_after_viewing']:
-                        session.run(
-                        """
-                        MERGE (b1:Book {asin: $asin1}) 
-                        MERGE (b2:Book {asin: $asin2})
-                        MERGE (b1)-[:ALSO_VIEWED]->(b2)
-                        """,
-                        asin1=book['asin'], asin2=also_viewed_asin
-                        )
-            break
+
+
+                # Create relationships (BUY_AFTER_VIEWING)
+                if 'related' in book and 'buy_after_viewing' in book['related']:
+                    for buy_after_viewing_asin in book['related']['buy_after_viewing']:
+                            session.run(
+                            """
+                            MERGE (b1:Book {asin: $asin1}) 
+                            MERGE (b2:Book {asin: $asin2})
+                            MERGE (b1)-[:BUY_AFTER_VIEWING]->(b2)
+                            """,
+                            asin1=book['asin'], asin2=buy_after_viewing_asin
+                            )
+                # Create relationships (ALSO_VIEWED)
+                if 'related' in book and 'also_viewed' in book['related']:
+                    for also_viewed_asin in book['related']['also_viewed']:
+                            session.run(
+                            """
+                            MERGE (b1:Book {asin: $asin1}) 
+                            MERGE (b2:Book {asin: $asin2})
+                            MERGE (b1)-[:ALSO_VIEWED]->(b2)
+                            """,
+                            asin1=book['asin'], asin2=also_viewed_asin
+                            )
+            except neo4j.exceptions.CypherTypeError as e:
+                print(f"CypherTypeError for book {book['asin']}: {e}")
+            except Exception as e:
+                print(f"Unexpected error for book {book['asin']}: {e}")
+
+
+    # Deal with the book reviews
+    if data_categ == 'review_books':
+        for review in generate_json_objects(data_categ):
+            # Validate JSON object before processing
+            if not is_valid_review(review):
+                print(f"Skipping invalid review object: {review}")
+                continue
+            session.run(
+                """
+                MERGE (r:Reviewer {reviewerID: $reviewerID})
+                ON CREATE SET r.reviewerName = $reviewerName
+                
+                MERGE (b:Book {asin: $asin})
+                
+                WITH r, b
+                MERGE (r)-[rev:REVIEWED]->(b)
+                ON CREATE SET rev.reviewText = $reviewText, rev.overall = $overall, 
+                              rev.summary = $summary, rev.unixReviewTime = $unixReviewTime, 
+                              rev.reviewTime = $reviewTime, rev.helpful = $helpful
+                """,
+                reviewerID=review['reviewerID'], reviewerName=review.get('reviewerName', None),
+                asin=review['asin'], reviewText=review.get('reviewText', None), overall=review.get('overall', None),
+                summary=review.get('summary', None), unixReviewTime=review.get('unixReviewTime', None),
+                reviewTime=review.get('reviewTime', None), helpful=review.get('helpful', None)
+            ) #Attempts to match reviewers and books and create them if they don't exist. Nb: certain propoerties such as "reviewName" are only set if a new node is being created for the first time.
 
 
 if __name__ == "__main__":
@@ -162,4 +199,5 @@ if __name__ == "__main__":
 
     with driver.session() as session:
         load_to_neo4j(session, 'meta_books')
+        load_to_neo4j(session, 'review_books')
 
