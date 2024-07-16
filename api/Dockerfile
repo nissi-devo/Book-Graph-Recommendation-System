@@ -12,7 +12,6 @@ RUN pip install -r requirements.txt
 
 # Copy the application code to the working directory
 COPY . .
-
 # Expose the port on which the application will run
 EXPOSE 8080
 

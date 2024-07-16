@@ -57,6 +57,12 @@ services:
       - "8080:8080"
     depends_on:
       - neo4j
+    volumes:
+      - ./api:/app
+    env_file:
+      - .env
+    networks:
+      - recommender-node
 
 networks:
   recommender-node:

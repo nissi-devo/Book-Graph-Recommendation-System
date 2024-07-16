@@ -1,6 +1,5 @@
 import sys
 import os
-
 import neo4j
 
 # Add the parent directory to the Python path
@@ -53,8 +52,6 @@ def generate_json_objects(data_categ):
         for json_obj in json_objects:
             yield json_obj
 
-def transform_review_data():
-    pass
 def load_to_neo4j(session, data_categ):
     #Set unique constraint on 'asin'. Uncomment and run once.
     #session.run("CREATE CONSTRAINT FOR (b:Book) REQUIRE b.asin IS UNIQUE")
@@ -190,7 +187,6 @@ if __name__ == "__main__":
 
                       )
     bucket_name = 'book-reviews'
-
     # Initialize the Neo4j driver
     neo4j_uri = "bolt://localhost:7687"
     neo4j_user = os.getenv("NEO4J_USER")

@@ -14,3 +14,6 @@ __pycache__/
 # Ignore .env files
 .env/
 
+#Ignore fastapi volumes
+.app/
+
