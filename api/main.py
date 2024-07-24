@@ -43,3 +43,32 @@ def recommend_books_by_similar_reviewers(asin: str):
     if not recommendations:
         raise HTTPException(status_code=404, detail="No recommendations found")
     return {"recommendations": recommendations}
+
+@app.get("/recommendations/also-bought")
+def recommend_books_bought_together(asin: str):
+    try:
+        recommendations = neo4j_service.recommend_books_also_bought(asin)
+        if not recommendations:
+            raise HTTPException(status_code=404, detail="No recommendations found")
+        return recommendations
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/recommendations/helpful-votes")
+def recommend_books_with_helpful_votes(asin: str):
+    try:
+        recommendations = neo4j_service.recommend_books_with_helpful_votes(asin)
+        if not recommendations:
+            raise HTTPException(status_code=404, detail="No recommendations found")
+        return recommendations
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+@app.get("/recommendations/same-category")
+def recommend_books_with_helpful_votes(asin: str):
+    try:
+        recommendations = neo4j_service.recommend_books_in_same_category(asin)
+        if not recommendations:
+            raise HTTPException(status_code=404, detail="No recommendations found")
+        return recommendations
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

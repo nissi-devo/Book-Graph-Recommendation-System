@@ -51,3 +51,24 @@ class Neo4jService:
                 recommendations.append(recommendation)
 
             return recommendations
+
+    def recommend_books_also_bought(self, asin):
+        with self.driver.session() as session:
+            result = session.run(cypher_queries.GET_BOOKS_ALSO_BOUGHT, asin=asin)
+            return [{"asin": record["asin"],
+                     "title": record["title"],
+                     "price": record["price"],
+                     "category": record["category"],
+                     "subcategories": record["subcategories"]} for record in result]
+
+    def recommend_books_with_helpful_votes(self, asin):
+        with self.driver.session() as session:
+            result = session.run(cypher_queries.GET_BOOKS_WITH_HELPFUL_VOTES, asin=asin)
+            return [{"reviewer": record["reviewer"], "review": record["review"], "helpfulVotes": record["helpfulVotes"],
+                     "totalVotes": record["totalVotes"], "helpfulness": record["helpfulness"]} for record in result]
+
+    def recommend_books_in_same_category(self, asin):
+        with self.driver.session() as session:
+            result = session.run(cypher_queries.GET_BOOKS_IN_SAME_CATEGORY, asin=asin)
+            return [{"recommendedBook": record["rec"], "category": record["category"]} for record in result]
+
