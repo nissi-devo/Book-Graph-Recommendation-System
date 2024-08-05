@@ -1,67 +1,40 @@
-import sys
-import os
 import neo4j
-
-# Add the parent directory to the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import json
-import boto3
-from dotenv import load_dotenv
+from airflow.models import BaseOperator
+from airflow.utils.decorators import apply_defaults
+from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from neo4j import GraphDatabase
-#User-defined packages
+import json
+import os
+
 from data_transformation.data_cleaning import preprocess_categories
-from data_transformation.data_validation import is_valid_book, is_valid_review
+from data_transformation.data_validation import is_valid_review, is_valid_book
 
 
-def extract_from_s3(bucket_name, data_categ, year, s3):
+class ConditionalLoadOperator(BaseOperator):
 
-    prefix = f"{data_categ}/{year}/"
-    continuation_token = None
-    json_files = []
+    @apply_defaults
+    def __init__(self, aws_conn_id, bucket_name, data_categ, neo4j_conn_uri, neo4j_user, neo4j_password, *args,
+                 **kwargs):
+        super(ConditionalLoadOperator, self).__init__(*args, **kwargs)
+        self.aws_conn_id = aws_conn_id
+        self.bucket_name = bucket_name
+        self.data_categ = data_categ
+        self.neo4j_conn_uri = neo4j_conn_uri
+        self.neo4j_user = neo4j_user
+        self.neo4j_password = neo4j_password
 
-    while True:
-        list_params = {
-            'Bucket': bucket_name,
-            'Prefix': prefix
-        }
-        #If there is more data to retrieve as a result of a previous trucncation provide that location so the data is retrieved
-        if continuation_token:
-            list_params['ContinuationToken'] = continuation_token
+    def execute(self, context):
+        s3 = S3Hook(aws_conn_id=self.aws_conn_id)
 
-        #Get the all objects contained in a given bucket directory example meta_books/2024/
-        response = s3.list_objects_v2(**list_params)
-
-        if 'Contents' in response:
-            for obj in response['Contents']:
-                if obj['Key'].endswith('.json'): #Ensure you only extract JSON files
-                    json_files.append(obj['Key'])
-
-        if response['IsTruncated']: #If IsTruncated is True, it means there are more objects to retrieve
-            continuation_token = response['NextContinuationToken']
+        if self.data_categ == 'meta_books':
+            json_files = context['ti'].xcom_pull(task_ids='extract_books', key=f'{self.data_categ}_json_files')
         else:
-            break
+            json_files = context['ti'].xcom_pull(task_ids='extract_reviews', key=f'{self.data_categ}_json_files')
 
-    return json_files
-def generate_json_objects(data_categ, bucket_name,s3):
-    json_files = extract_from_s3(bucket_name, data_categ, '2024')
-    for json_file in json_files:
-        response = s3.get_object(Bucket=bucket_name, Key=json_file)
-        content = response['Body'].read().decode('utf-8')
-        json_objects = json.loads(content)
+        driver = GraphDatabase.driver(self.neo4j_conn_uri, auth=(self.neo4j_user, self.neo4j_password))
 
-        for json_obj in json_objects:
-            yield json_obj
+        def process_book(session, book):
 
-def load_to_neo4j(session, data_categ, bucket_name, s3):
-    #Set unique constraint on 'asin'. Uncomment and run once.
-    #session.run("CREATE CONSTRAINT FOR (b:Book) REQUIRE b.asin IS UNIQUE")
-
-    #Deal with the book metadata
-    if data_categ == 'meta_books':
-        for book in generate_json_objects(data_categ, bucket_name, s3):
-            if not is_valid_book(book):
-                print(f"Skipping invalid book object: {book}")
-                continue
             # Create Book node
             #ON CREATE SET: If the node is newly created (i.e., it didn't exist before), it sets the properties title, price etc
             #ON MATCH SET: If the node already exists (i.e., it was matched), it updates the properties only if they are NULL or haven't been set yet
@@ -148,21 +121,14 @@ def load_to_neo4j(session, data_categ, bucket_name, s3):
             except Exception as e:
                 print(f"Unexpected error for book {book['asin']}: {e}")
 
-
-    # Deal with the book reviews
-    if data_categ == 'review_books':
-        for review in generate_json_objects(data_categ, bucket_name, s3):
-            # Validate JSON object before processing
-            if not is_valid_review(review):
-                print(f"Skipping invalid review object: {review}")
-                continue
+        def process_review(session, review):
             session.run(
                 """
                 MERGE (r:Reviewer {reviewerID: $reviewerID})
                 ON CREATE SET r.reviewerName = $reviewerName
-                
+
                 MERGE (b:Book {asin: $asin})
-                
+
                 WITH r, b
                 MERGE (r)-[rev:REVIEWED]->(b)
                 ON CREATE SET rev.reviewText = $reviewText, rev.overall = $overall, 
@@ -173,28 +139,22 @@ def load_to_neo4j(session, data_categ, bucket_name, s3):
                 asin=review['asin'], reviewText=review.get('reviewText', None), overall=review.get('overall', None),
                 summary=review.get('summary', None), unixReviewTime=review.get('unixReviewTime', None),
                 reviewTime=review.get('reviewTime', None), helpful=review.get('helpful', None)
-            ) #Attempts to match reviewers and books and create them if they don't exist. Nb: certain propoerties such as "reviewName" are only set if a new node is being created for the first time.
+            )  # Attempts to match reviewers and books and create them if they don't exist. Nb: certain propoerties such as "reviewName" are only set if a new node is being created for the first time.
 
-
-if __name__ == "__main__":
-    load_dotenv()
-
-    # Connect to S3 bucket
-    s3 = boto3.client('s3',
-                      aws_access_key_id=os.getenv('AWS_ACCESS_KEY'),
-                      aws_secret_access_key=os.getenv('AWS_SECRET'),
-                      region_name='us-east-1'
-
-                      )
-    bucket_name = 'book-reviews'
-    # Initialize the Neo4j driver
-    neo4j_uri = "bolt://localhost:7687"
-    neo4j_user = os.getenv("NEO4J_USER")
-    neo4j_password = os.getenv("NEO4J_PASSWORD")
-    driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
-
-    with driver.session() as session:
-        load_to_neo4j(session, 'meta_books', bucket_name,  s3)
-        load_to_neo4j(session, 'review_books', bucket_name, s3)
-
-
+        with driver.session() as session:
+            for json_file in json_files:
+                content = s3.read_key(json_file, bucket_name=self.bucket_name)
+                json_objects = json.loads(content)
+                if self.data_categ == 'meta_books':
+                    for book in json_objects:
+                        if not is_valid_book(book):
+                            print(f"Skipping invalid book object: {book}")
+                            continue
+                        process_book(session, book)
+                elif self.data_categ == 'review_books':
+                    for review in json_objects:
+                        # Validate JSON object before processing
+                        if not is_valid_review(review):
+                            print(f"Skipping invalid review object: {review}")
+                            continue
+                        process_review(session, review)
