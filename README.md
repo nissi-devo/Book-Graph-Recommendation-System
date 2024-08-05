@@ -17,17 +17,57 @@ Data Serving: Uses FastAPI to serve book recommendations based on the Neo4j data
 
 <h2><strong>Technologies Used</strong></h2><br>
 
-**Amazon S3**: For storage of raw and processed data.
-**Apache Spark**: For data transformation and partitioning.
-**Neo4j**: Graph database for storing book metadata and relationships.
-**FastAPI**: For serving book recommendations.
-**Docker**: For containerization of the application components.
-**Apache Airflow**: For cataloging and ETL processes (optional). <br>
+**Amazon S3**: For storage of raw and processed data.<br>
+**Apache Spark**: For data transformation and partitioning.<br>
+**Neo4j**: Graph database for storing book metadata and relationships.<br>
+**FastAPI**: For serving book recommendations.<br>
+**Docker**: For containerization of the application components.<br>
+**Apache Airflow**: For ETL processes <br>
 
 <h2><strong>Setup</strong></h2><br>
-**Prerequisites**
-Docker
-Docker Compose
-AWS Account (with S3 and IAM setup)
-Python 3.7+
 
+**Prerequisites**
+Docker <br>
+Docker Compose <br>
+AWS Account (with S3 and IAM setup)<br>
+Python 3.8+<br>
+
+<h2><strong>Data Snapshot</strong></h2> <br>
+
+```json
+{
+  "asin": "0000913154",
+  "title": "The Way Things Work: An Illustrated Encyclopedia of Technology",
+  "price": 23.26,
+  "imUrl": "http://ecx.images-amazon.com/images/I/7113akhDnTL.jpg",
+  "related": {
+    "also_bought": [
+      "0590429892",
+      "1114119512",
+      "B000HW2YQE",
+      "0395938473",
+      "0395428572",
+      "0449208133",
+      "0486217094",
+      "0618233784",
+      "0486443604",
+      "1856698769",
+      "0942364155",
+      "0936070129",
+      "0671224549"
+    ],
+    "buy_after_viewing": [
+      "0395938473",
+      "B000GP0CT8",
+      "0590429892",
+      "1114119512"
+    ]
+  },
+  "salesRank": {
+    "Books": 455782
+  },
+  "categories": [
+    ["Books"]
+  ]
+}
+```
