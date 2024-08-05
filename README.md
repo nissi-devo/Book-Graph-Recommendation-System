@@ -26,7 +26,7 @@ Data Serving: Uses FastAPI to serve book recommendations based on the Neo4j data
 
 <h2><strong>Setup</strong></h2><br>
 
-**Prerequisites**
+**Prerequisites** <br>
 Docker <br>
 Docker Compose <br>
 AWS Account (with S3 and IAM setup)<br>
@@ -34,6 +34,7 @@ Python 3.8+<br>
 
 <h2><strong>Data Snapshot</strong></h2> <br>
 
+<i>meta_books.json</i> <br>
 ```json
 {
   "asin": "0000913154",
@@ -71,3 +72,21 @@ Python 3.8+<br>
   ]
 }
 ```
+<br>
+
+<i>reviews_books.json</i> <br>
+
+```json
+{
+"reviewerID": "AFXV42SPFF6NZ",
+"asin": "000171287X",
+"reviewerName": "Concerned Christian",
+"helpful": [0, 0],
+"reviewText": "This is a book that I read over and over to my daughter and now I plan on reading it to my granddaughter.  Received it very quickly. Thanks!",
+"overall": 5.0,
+"summary": "Childhood memory",
+"unixReviewTime": 1392249600,
+"reviewTime": "02 13, 2014"
+}
+```
+<br>
