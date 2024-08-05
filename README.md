@@ -96,3 +96,12 @@ Data in S3 bucket
 
 Neo4j Graph diagram 
 ![Example Image](images/db-all-nodes.png) <br>
+
+Books bought after viewing others (shows BUY_AFTER_VIEWING relationship).
+![Example Image](images/db-buy-after-viewing.png) <br>
+
+Query returning books reviewed by similar reviewers
+![Example Image](images/db-similar-reviewers.png) <br>
+
+Neo4j Graph diagram 
+![Example Image](images/db-all-nodes.png) <br>
