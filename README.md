@@ -90,3 +90,9 @@ Python 3.8+<br>
 }
 ```
 <br>
+
+Data in S3 bucket
+![Example Image](images/s3-books-reviews.png) <br>
+
+Neo4j Graph diagram 
+![Example Image](images/db-all-nodes.png) <br>
