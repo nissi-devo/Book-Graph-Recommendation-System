@@ -4,10 +4,10 @@
 
 This repository contains a comprehensive data pipeline for creating a book recommendation system. The pipeline processes book metadata and reviews in JSON format, partitions and stores the data in S3 buckets, transforms the data, and loads it into a Neo4j database. The Neo4j database is then queried to serve recommendations through a FastAPI endpoint.
 
-Introduction
+<h2><strong>Introduction</strong></h2>
 This project is designed to provide an end-to-end solution for creating a book recommendation system. The pipeline takes raw book metadata and review data in JSON format, processes it, and stores it in S3 buckets. The data is then transformed and loaded into a Neo4j graph database, which is used to generate book recommendations. The recommendations are served via a FastAPI endpoint.
 
-Architecture
+<h2><strong>Architecture</strong></h2>
 The data pipeline consists of the following stages:
 
 Data Ingestion: Collects book metadata and reviews in JSON format and partitions the data into chunks stored in S3 buckets.
@@ -103,5 +103,7 @@ Books bought after viewing others (shows BUY_AFTER_VIEWING relationship).
 Query returning books reviewed by similar reviewers
 ![Example Image](images/db-similar-reviewers.png) <br>
 
-Neo4j Graph diagram 
-![Example Image](images/db-all-nodes.png) <br>
+API endpoint that returns for a specific book, the helpfulness of each review, and returns the top 10 reviews sorted by their helpfulness and the total number of votes. 
+![Example Image](images/api-helpful-votes.png) <br>
+
+
