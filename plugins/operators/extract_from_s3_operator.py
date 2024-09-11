@@ -15,19 +15,25 @@ class ExtractFromS3Operator(BaseOperator):
     def execute(self, context):
         s3 = S3Hook(aws_conn_id=self.aws_conn_id)
         prefix = f"{self.data_categ}/{self.year}/"
-        continuation_token = None
         json_files = []
+        continuation_token=None
 
+        # Using the list_keys method provided by S3Hook
         while True:
-            list_params = {'Bucket': self.bucket_name, 'Prefix': prefix}
-            if continuation_token:
-                list_params['ContinuationToken'] = continuation_token
-            response = s3.list_keys(bucket_name=self.bucket_name, prefix=prefix, continuation_token=continuation_token)
+            # List keys using S3Hook
+            response = s3.list_keys(bucket_name=self.bucket_name, prefix=prefix)
+
             if response:
-                json_files.extend(response)
+                json_files.extend(response)  # Extend with the keys
+            else:
+                break
+
+            # Check if continuation is needed (for pagination)
             if 'IsTruncated' in response and response['IsTruncated']:
                 continuation_token = response['NextContinuationToken']
             else:
                 break
 
+        # Push the list of JSON files to XCom
         context['ti'].xcom_push(key=f'{self.data_categ}_json_files', value=json_files)
+

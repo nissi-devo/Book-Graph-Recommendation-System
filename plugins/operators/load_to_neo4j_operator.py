@@ -4,7 +4,6 @@ from airflow.utils.decorators import apply_defaults
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from neo4j import GraphDatabase
 import json
-import os
 
 from data_transformation.data_cleaning import preprocess_categories
 from data_transformation.data_validation import is_valid_review, is_valid_book

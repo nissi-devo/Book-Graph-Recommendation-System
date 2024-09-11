@@ -1,11 +1,16 @@
 from airflow import DAG
+from airflow.utils.task_group import TaskGroup
 from datetime import datetime, timedelta
 import os
+import sys
 from dotenv import load_dotenv
 
-from airflow.operators import ExtractFromS3Operator, ConditionalLoadOperator
+from operators.extract_from_s3_operator import ExtractFromS3Operator
+from operators.load_to_neo4j_operator import ConditionalLoadOperator
 
 load_dotenv()
+
+
 # Initialize the Neo4j driver
 neo4j_uri = "bolt://localhost:7687"
 neo4j_user = os.getenv("NEO4J_USER")
@@ -29,44 +34,49 @@ dag = DAG(
     catchup=False,
 )
 
-extract_books_task = ExtractFromS3Operator(
-    task_id='extract_books',
-    aws_conn_id='aws_default',
-    bucket_name='book-reviews',
-    data_categ='meta_books',  # This should be the same for both book and review tasks, change as needed
-    year='2024',
-    dag=dag
-)
+# TaskGroup for Extraction Tasks
+with TaskGroup('extraction_group', dag=dag) as extraction_group:
+    extract_books_task = ExtractFromS3Operator(
+        task_id='extract_books',
+        aws_conn_id='aws_default',
+        bucket_name='book-reviews',
+        data_categ='meta_books',
+        year='2024',
+        dag=dag
+    )
 
-extract_reviews_task = ExtractFromS3Operator(
-    task_id='extract_reviews',
-    aws_conn_id='aws_default',
-    bucket_name='book-reviews',
-    data_categ='review_books',  # This should be the same for both book and review tasks, change as needed
-    year='2024',
-    dag=dag
-)
+    extract_reviews_task = ExtractFromS3Operator(
+        task_id='extract_reviews',
+        aws_conn_id='aws_default',
+        bucket_name='book-reviews',
+        data_categ='review_books',
+        year='2024',
+        dag=dag
+    )
 
-load_books_task = ConditionalLoadOperator(
-    task_id='load_books',
-    aws_conn_id='aws_default',
-    bucket_name='book-reviews',
-    data_categ='meta_books',  # Process books
-    neo4j_conn_uri=neo4j_uri,
-    neo4j_user=neo4j_user,
-    neo4j_password=neo4j_password,
-    dag=dag,
-)
+# TaskGroup for Loading Tasks
+with TaskGroup('loading_group', dag=dag) as loading_group:
+    load_books_task = ConditionalLoadOperator(
+        task_id='load_books',
+        aws_conn_id='aws_default',
+        bucket_name='book-reviews',
+        data_categ='meta_books',  # Process books
+        neo4j_conn_uri=neo4j_uri,
+        neo4j_user=neo4j_user,
+        neo4j_password=neo4j_password,
+        dag=dag
+    )
 
-load_reviews_task = ConditionalLoadOperator(
-    task_id='load_reviews',
-    aws_conn_id='aws_default',
-    bucket_name='book-reviews',
-    data_categ='review_books',  # Process reviews
-    neo4j_conn_uri=neo4j_uri,
-    neo4j_user=neo4j_user,
-    neo4j_password=neo4j_password,
-    dag=dag,
-)
+    load_reviews_task = ConditionalLoadOperator(
+        task_id='load_reviews',
+        aws_conn_id='aws_default',
+        bucket_name='book-reviews',
+        data_categ='review_books',  # Process reviews
+        neo4j_conn_uri=neo4j_uri,
+        neo4j_user=neo4j_user,
+        neo4j_password=neo4j_password,
+        dag=dag
+    )
 
-[extract_books_task, extract_reviews_task] >> [load_books_task, load_reviews_task]
+# Define dependencies between TaskGroups
+extraction_group >> loading_group
