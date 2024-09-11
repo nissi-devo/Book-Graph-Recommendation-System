@@ -106,4 +106,7 @@ Query returning books reviewed by similar reviewers
 API endpoint that returns for a specific book, the helpfulness of each review, and returns the top 10 reviews sorted by their helpfulness and the total number of votes. 
 ![Example Image](images/api-helpful-votes.png) <br>
 
+ETL Pipeline set up in Airflow. 
+![Example Image](images/airflow_pipeline.png) <br>
+
 
